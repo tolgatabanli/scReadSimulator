@@ -31,24 +31,6 @@ public class Main {
                     }
                     break;
 
-                case "-frlength":
-                    if (i + 1 < args.length) {
-                        Config.FR_LENGTH = Integer.parseInt(args[++i]);
-                    } else {
-                        System.err.println("Error: Please give an integer after -frlength!");
-                        return;
-                    }
-                    break;
-
-                case "-SD":
-                    if (i + 1 < args.length) {
-                        Config.SD = Integer.parseInt(args[++i]);
-                    } else {
-                        System.err.println("Error: Please give an integer after -SD!");
-                        return;
-                    }
-                    break;
-
                 case "-tailLength":
                     if (i + 1 < args.length) {
                         Config.TAIL_LENGTH = Integer.parseInt(args[++i]);
@@ -127,7 +109,6 @@ public class Main {
         lineCounter.close();
 
         // ===== Read Counts ===== //
-        //logTime("Started reading read counts.");
         Map<String, Transcript> transcripts = new HashMap<>((int) (numLines / 0.75 + 1)); // TranscriptID -> (TranscriptID, count, GeneID)
         BufferedReader reader = new BufferedReader(new FileReader(readcounts));
         String line;
@@ -136,11 +117,8 @@ public class Main {
             String[] fields = line.split("\t"); // GeneID - TranscriptID - Count
             transcripts.put(fields[1], new Transcript(fields[0], fields[1], Integer.parseInt(fields[2])));
         }
-        //logTime("Ended reading read counts.");
 
-        //logTime("Started reading GTF file.");
         // ===== GTF ===== //
-        long gtfReadStart = System.currentTimeMillis();
         reader = new BufferedReader(new FileReader(gtf));
         while ((line = reader.readLine()) != null) {
             if (line.startsWith("#")) continue;
@@ -180,10 +158,6 @@ public class Main {
                 transcript.addToUTRLength(utrLen);
             }
         }
-        long gtfReadEnd = System.currentTimeMillis();
-        long gtfReadTime = gtfReadEnd - gtfReadStart;
-        //System.out.println("GTF read time: " + gtfReadTime + "ms");
-        //logTime("Ended reading GTF file.");
 
         try {
             Files.createDirectories(Path.of(Config.OUTPUT_DIR));
@@ -195,11 +169,7 @@ public class Main {
         File read2Fastq = new File(Config.OUTPUT_DIR + File.separator + "read2.fastq");
 
         Iterator<Map.Entry<String, Transcript>> transcriptIterator = transcripts.entrySet().iterator();
-        final String qualityString = "I".repeat(Config.READ_LENGTH) + "\n";
         int[] indexHolder = {0};
-        int indexInMapping = 0;
-        int fwIndex = 0;
-        int rwIndex = 0;
 
         try (
             BufferedWriter mapWriter = new BufferedWriter(new FileWriter(mappingInfo));
@@ -207,29 +177,14 @@ public class Main {
         ) {
             mapWriter.write("readid\tchr\tgene\ttranscript\tread2_regvec\tt_read2_regvec\tread2_mut\n");
 
-            long simTime = 0;
-            //logTime("Started simulating reads.");
             while (transcriptIterator.hasNext()) {
                 Map.Entry<String, Transcript> entry = transcriptIterator.next();
                 Transcript t = entry.getValue();
 
-                long simStart = System.currentTimeMillis();
                 t.simulateReads(fastaReader, mapWriter, read2Writer, indexHolder);
-                long simEnd = System.currentTimeMillis();
-                simTime += simEnd - simStart;
                 // free memory hopefully!!
                 transcriptIterator.remove();
-                //logTime("Transcript removed from the iterator.");
             }
-            System.out.println("gtf_Reading\tSequence_Reading\tSimulating\tWriting");
-                System.out.println(gtfReadTime + "\t" + fastaReader.time + "\t" + simTime + "\t0");
-            //logTime("Ended simulating reads.");
         }
-    }
-
-    public static void logTime(String message) {
-        long uptimeMs = ManagementFactory.getRuntimeMXBean().getUptime();
-        double uptimeSec = uptimeMs / 1000.0;
-        System.out.printf("[%,3fs] %s%n", uptimeSec, message);
     }
 }
